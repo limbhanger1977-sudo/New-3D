@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BuckFinders 3D Deer — Pin + Vitals Edit</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <style>
+    html,body{height:100%;margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    model-viewer{width:100%;height:100%;--poster-color:transparent;--progress-bar-color:#ff3b3b}
+
+    /* Pin (red rod) */
+    .pin{position:relative;width:6px;height:120px;background:#ff2a2a;border-radius:3px;
+         box-shadow:0 0 10px rgba(255,40,40,.8);transform:translate(-50%,-100%);touch-action:none}
+    .pin::after{content:"";position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);
+         width:12px;height:12px;border-radius:50%;background:#ff2a2a;box-shadow:0 0 8px rgba(255,40,40,.8)}
+
+    /* Exit pin (thin ring) */
+    .pin.exit{height:16px;width:16px;background:transparent;border:3px solid #ffcc33;border-radius:50%;
+              box-shadow:0 0 10px rgba(255,204,51,.7);transform:translate(-50%,-50%)}
+
+    /* Vitals */
+    .vital{border-radius:50%;opacity:.35;transform:translate(-50%,-50%);pointer-events:none;
+           box-shadow:0 0 12px rgba(0,0,0,.4) inset,0 0 12px currentColor}
+    .heart{width:140px;height:110px;color:#ff4d4d;background:#ff4d4d}
+    .lungs{width:230px;height:170px;color:#4da6ff;background:#4da6ff}
+    .liver{width:170px;height:125px;color:#ffd24d;background:#ffd24d}
+
+    /* UI */
+    .ui{position:fixed;left:12px;bottom:12px;display:flex;flex-wrap:wrap;gap:8px;z-index:10}
+    .ui > *{background:rgba(20,20,20,.75);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:10px 12px;font-size:14px;backdrop-filter:blur(6px)}
+    .row{display:flex;gap:8px;align-items:center}
+    .nudge .btn{padding:6px 8px}
+    .mode.active{border-color:#ff2a2a;box-shadow:0 0 0 2px rgba(255,42,42,.25) inset}
+    .legend{position:fixed;right:12px;bottom:12px;background:rgba(20,20,20,.75);
+            border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:10px 12px;font-size:14px;backdrop-filter:blur(6px)}
+    .swatch{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+    .swatch.heart{background:#ff4d4d}.swatch.lungs{background:#4da6ff}.swatch.liver{background:#ffd24d}
+    .small{font-size:12px;opacity:.85}
+    .divider{width:1px;height:32px;background:rgba(255,255,255,.2);margin:0 6px}
+  </style>
+</head>
+<body>
+
+  <model-viewer id="mv"
+    src="https://raw.githubusercontent.com/limbhanger1977-sudo/Buckfinders-3D/08b82c1bbde8adfdb3180cdb0a9d79955dbc40a7/BuckFinders_Deer.glb"
+    camera-controls auto-rotate exposure="1" shadow-intensity="0.6" environment-image="neutral"
+    ar ar-modes="webxr scene-viewer quick-look">
+
+    <!-- Pins -->
+    <div id="pin" class="pin" slot="hotspot-pin" data-position="0 0 0" data-normal="0 1 0" style="display:none;"></div>
+    <div id="exitPin" class="pin exit" slot="hotspot-exit" data-position="0 0 0" data-normal="0 1 0" style="display:none;"></div>
+
+    <!-- Vitals (we’ll place them by hit-test so they stick) -->
+    <div id="v-heart" class="vital heart" slot="hotspot-heart" data-position="0 0 0" data-normal="0 1 0" style="display:none;"></div>
+    <div id="v-lungs" class="vital lungs" slot="hotspot-lungs" data-position="0 0 0" data-normal="0 1 0" style="display:none;"></div>
+    <div id="v-liver" class="vital liver" slot="hotspot-liver" data-position="0 0 0" data-normal="0 1 0" style="display:none;"></div>
+  </model-viewer>
+
+  <!-- Controls -->
+  <div class="ui">
+    <div class="row">
+      <button id="mode-pin" class="mode active" title="Tap/drag to place & move the pin">Pin Mode</button>
+      <label class="row"><input type="checkbox" id="lock-pin"/> Lock Pin</label>
+      <button id="clear-pin">Clear Pin</button>
+      <div class="divider"></div>
+      <div class="row nudge">
+        <span class="small">Nudge:</span>
+        <button class="btn" data-nudge="-5,0">◀︎5</button>
+        <button class="btn" data-nudge="-1,0">◀︎1</button>
+        <button class="btn" data-nudge="1,0">1▶︎</button>
+        <button class="btn" data-nudge="5,0">5▶︎</button>
+        <button class="btn" data-nudge="0,-5">▲5</button>
+        <button class="btn" data-nudge="0,-1">▲1</button>
+        <button class="btn" data-nudge="0,1">1▼</button>
+        <button class="btn" data-nudge="0,5">5▼</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="mode-vitals" class="mode" title="Tap to place/edit vitals">Vitals Mode</button>
+      <select id="which-vital">
+        <option value="heart">Heart</option>
+        <option value="lungs">Lungs</option>
+        <option value="liver">Liver</option>
+      </select>
+      <button id="size-minus">Size −</button>
+      <button id="size-plus">Size +</button>
+      <label class="row"><input type="checkbox" id="show-vitals"/> Show Vitals</label>
+      <div class="divider"></div>
+      <button id="set-exit" title="While pin is locked, rotate to far side and tap to set exit">Set Exit</button>
+      <button id="clear-exit">Clear Exit</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div><span class="swatch heart"></span>Heart</div>
+    <div><span class="swatch lungs"></span>Lungs</div>
+    <div><span class="swatch liver"></span>Liver</div>
+  </div>
+
+  <script>
+    const mv = document.getElementById('mv');
+    const pinEl = document.getElementById('pin');
+    const exitEl = document.getElementById('exitPin');
+
+    // Modes
+    const btnPinMode   = document.getElementById('mode-pin');
+    const btnVitalsMode= document.getElementById('mode-vitals');
+    const lockPinChk   = document.getElementById('lock-pin');
+    const clearPinBtn  = document.getElementById('clear-pin');
+    const showVitals   = document.getElementById('show-vitals');
+    const whichVital   = document.getElementById('which-vital');
+    const sizeMinus    = document.getElementById('size-minus');
+    const sizePlus     = document.getElementById('size-plus');
+    const setExitBtn   = document.getElementById('set-exit');
+    const clearExitBtn = document.getElementById('clear-exit');
+
+    const vHeart = document.getElementById('v-heart');
+    const vLungs = document.getElementById('v-lungs');
+    const vLiver = document.getElementById('v-liver');
+
+    let mode = 'pin'; // 'pin' | 'vitals'
+    function setMode(m){
+      mode = m;
+      btnPinMode.classList.toggle('active', mode==='pin');
+      btnVitalsMode.classList.toggle('active', mode==='vitals');
+    }
+    btnPinMode.onclick    = () => setMode('pin');
+    btnVitalsMode.onclick = () => setMode('vitals');
+
+    // Helpers: screen->hit, set hotspot
+    function rect(){ return mv.getBoundingClientRect(); }
+    function hitAtScreen(dx, dy){
+      return mv.positionAndNormalFromPoint(dx, dy);
+    }
+    function placeHotspot(el, hit){
+      const {position: p, normal: n} = hit;
+      el.dataset.position = `${p.x} ${p.y} ${p.z}`;
+      el.dataset.normal   = `${n.x} ${n.y} ${n.z}`;
+      el.style.display = 'block';
+    }
+
+    // Track last screen position per element for nudging
+    const lastScreen = new Map(); // element -> {x,y}
+
+    function storeScreen(el, x, y){ lastScreen.set(el, {x,y}); }
+    function placeFromEvent(el, ev){
+      const r = rect();
+      const x = (ev.touches?.[0]?.clientX ?? ev.clientX) - r.left;
+      const y = (ev.touches?.[0]?.clientY ?? ev.clientY) - r.top;
+      const h = hitAtScreen(x, y);
+      if (h){ placeHotspot(el, h); storeScreen(el, x, y); }
+    }
+    function nudge(el, nx, ny){
+      const r = rect();
+      const last = lastScreen.get(el) || {x: r.width/2, y: r.height/2};
+      const x = Math.max(0, Math.min(r.width,  last.x + nx));
+      const y = Math.max(0, Math.min(r.height, last.y + ny));
+      const h = hitAtScreen(x, y);
+      if (h){ placeHotspot(el, h); storeScreen(el, x, y); }
+    }
+
+    // PIN: tap/drag to place/move (unless locked)
+    let dragging = false;
+    mv.addEventListener('click', (e) => {
+      if (mode==='pin' && !lockPinChk.checked){
+        placeFromEvent(pinEl, e);
+      } else if (mode==='vitals'){
+        const v = whichVital.value;
+        const el = v==='heart'?vHeart : v==='lungs'?vLungs : vLiver;
+        placeFromEvent(el, e);
+      } else if (lockPinChk.checked && setExitActive){
+        placeFromEvent(exitEl, e);
+      }
+    }, {passive:true});
+
+    mv.addEventListener('pointerdown', (e) => {
+      if (mode==='pin' && !lockPinChk.checked){
+        dragging = true; mv.setPointerCapture(e.pointerId);
+        placeFromEvent(pinEl, e);
+      }
+    });
+    mv.addEventListener('pointermove', (e) => {
+      if (dragging && mode==='pin' && !lockPinChk.checked) placeFromEvent(pinEl, e);
+    });
+    mv.addEventListener('pointerup', ()=> dragging=false);
+    mv.addEventListener('pointercancel', ()=> dragging=false);
+
+    // Clear pin
+    clearPinBtn.onclick = () => { pinEl.style.display='none'; lastScreen.delete(pinEl); };
+
+    // Nudges (act on PIN in Pin mode)
+    document.querySelectorAll('.nudge .btn').forEach(b=>{
+      b.onclick = () => {
+        if (mode!=='pin' || lockPinChk.checked) return;
+        const [dx,dy] = b.dataset.nudge.split(',').map(Number);
+        nudge(pinEl, dx, dy);
+      };
+    });
+
+    // Vitals show/hide
+    showVitals.onchange = () => {
+      const show = showVitals.checked ? 'block' : 'none';
+      vHeart.style.display = show; vLungs.style.display = show; vLiver.style.display = show;
+    };
+
+    // Vitals sizing
+    function resizeVital(el, delta){
+      const s = window.getComputedStyle(el);
+      const w = parseFloat(s.width); const h = parseFloat(s.height);
+      const nw = Math.max(60, Math.min(420, w + delta));
+      const nh = Math.max(60, Math.min(420, h + delta * (h/w)));
+      el.style.width  = nw + 'px';
+      el.style.height = nh + 'px';
+    }
+    sizeMinus.onclick = ()=> {
+      const el = whichVital.value==='heart'?vHeart:whichVital.value==='lungs'?vLungs:vLiver;
+      resizeVital(el, -10);
+    };
+    sizePlus.onclick = ()=> {
+      const el = whichVital.value==='heart'?vHeart:whichVital.value==='lungs'?vLungs:vLiver;
+      resizeVital(el, +10);
+    };
+
+    // Exit placement while locked
+    let setExitActive = false;
+    setExitBtn.onclick = ()=>{
+      if (!lockPinChk.checked){
+        alert('Lock the pin first, then rotate to the far side and tap to set exit.');
+        return;
+      }
+      setExitActive = true;
+      setExitBtn.classList.add('mode','active');
+    };
+    clearExitBtn.onclick = ()=>{
+      exitEl.style.display='none'; lastScreen.delete(exitEl);
+      setExitActive = false; setExitBtn.classList.remove('active');
+    };
+
+    // Initial vitals: try to snap to chest area at load
+    function tryPlaceAtViewport(u, v){
+      const r = rect();
+      return hitAtScreen(u*r.width, v*r.height);
+    }
+    function snapVitals(){
+      const spots = [[0.60,0.50],[0.58,0.47],[0.64,0.52],[0.55,0.54]];
+      for (const [u,v] of spots){ const h = tryPlaceAtViewport(u,v); if (h){ placeHotspot(vHeart,h); break; } }
+      for (const [u,v] of spots){ const h = tryPlaceAtViewport(u+0.02,v-0.05); if (h){ placeHotspot(vLungs,h); break; } }
+      for (const [u,v] of spots){ const h = tryPlaceAtViewport(u-0.12,v+0.04); if (h){ placeHotspot(vLiver,h); break; } }
+    }
+
+    mv.addEventListener('load', ()=>{
+      // Side view helps initial chest raycasts
+      mv.cameraOrbit = "90deg 85deg 2m";
+      mv.jumpCameraToGoal();
+      snapVitals();
+    });
+  </script>
+</body>
+</html>
