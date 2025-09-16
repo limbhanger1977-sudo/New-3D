@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BuckFinders 3D Deer</title>
+
+  <!-- model-viewer -->
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+
+  <style>
+    :root {
+      --ui-bg: #121212cc;
+      --ui-border: #2a2a2a;
+      --ui-text: #eee;
+      --accent: #30a46c;
+      --danger: #e5484d;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      color: var(--ui-text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    model-viewer {
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      --poster-color: #000;
+      --progress-bar-color: #fff;
+    }
+
+    /* UI */
+    .panel {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: var(--ui-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 12px;
+      padding: 12px 12px 8px;
+      backdrop-filter: blur(6px);
+      user-select: none;
+    }
+    .panel h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+    .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+    label { font-size: 13px; opacity: 0.95; }
+    input[type="range"] { width: 120px; }
+
+    .controls {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      display: grid;
+      gap: 8px;
+      grid-auto-rows: 36px;
+    }
+    button {
+      background: var(--ui-bg);
+      border: 1px solid var(--ui-border);
+      color: var(--ui-text);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      letter-spacing: .01em;
+    }
+    button:hover { border-color: #3a3a3a; }
+    .solid { background: #1b1b1b; }
+    .accent { border-color: #2b6b4c; background: #153225; }
+    .danger { border-color: #7a2324; background: #2f1314; }
+
+    /* Red pin hotspot */
+    .pin {
+      width: 10px;
+      height: 60px;
+      transform: translate(-50%, -100%);  /* center top to hit-point */
+      display: inline-block;
+      position: relative;
+      pointer-events: none; /* UI doesn’t steal touch */
+    }
+    .pin .rod {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 2px;
+      height: 52px;
+      background: #ff2b2b;
+      transform: translateX(-50%);
+      box-shadow: 0 0 8px #ff2b2b88;
+    }
+    .pin .head {
+      position: absolute;
+      left: 50%;
+      bottom: -4px;
+      width: 12px;
+      height: 12px;
+      background: #ff2b2b;
+      border-radius: 50%;
+      transform: translate(-50%, 50%);
+      box-shadow: 0 0 8px #ff2b2b88;
+    }
+
+    /* small toast */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      background: #111c;
+      color: #eee;
+      border: 1px solid #333;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity .25s ease;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- 3D Viewer -->
+  <model-viewer id="mv"
+    src="https://raw.githubusercontent.com/limbhanger1977-sudo/Buckfinders-3D/08b82c1bbde8adfdb3180cdb0a9d79955dbc40a7/BuckFinders_Deer.glb"
+    shadow-intensity="0"
+    camera-controls
+    touch-action="pan-y"
+    exposure="1.0"
+    interaction-prompt="none"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    environment-image="neutral"
+  >
+    <!-- Red pin hotspot (hidden until placed) -->
+    <div id="pinHotspot" slot="hotspot-pin" class="pin" style="display:none">
+      <div class="rod"></div>
+      <div class="head"></div>
+    </div>
+  </model-viewer>
+
+  <!-- Vitals panel -->
+  <div class="panel">
+    <h3>Vitals Mode</h3>
+    <div class="row">
+      <input type="checkbox" id="chkHeart"><label for="chkHeart">Heart</label>
+      <input type="checkbox" id="chkLungs" style="margin-left:10px;"><label for="chkLungs">Lungs</label>
+    </div>
+    <div class="row">
+      <input type="checkbox" id="chkLiver"><label for="chkLiver">Liver</label>
+      <input type="checkbox" id="chkStomach" style="margin-left:10px;"><label for="chkStomach">Stomach</label>
+    </div>
+    <div class="row">
+      <label for="alpha">Vital opacity</label>
+      <input type="range" id="alpha" min="0.05" max="0.9" step="0.05" value="0.35">
+    </div>
+    <div class="row">
+      <label for="ghost">Ghost body</label>
+      <input type="range" id="ghost" min="0.2" max="1.0" step="0.05" value="1.0" title="Lower to see through body when vitals are on">
+    </div>
+  </div>
+
+  <!-- Pin controls -->
+  <div class="controls">
+    <button id="btnPlace" class="solid">Tap deer to place pin</button>
+    <button id="btnLock"  class="accent">Lock Pin</button>
+    <button id="btnClear" class="danger">Clear Pin</button>
+  </div>
+
+  <div id="toast" class="toast">Tap on the deer to place the red pin.</div>
+
+<script>
+const mv = document.getElementById('mv');
+const pin = document.getElementById('pinHotspot');
+const toast = document.getElementById('toast');
+
+const state = {
+  placing: false,
+  locked: false,
+  alpha: 0.35,
+  ghost: 1.0,
+};
+
+// Simple toast helper
+function say(msg, ms=1200){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(say._t);
+  say._t = setTimeout(()=>toast.classList.remove('show'), ms);
+}
+
+// Map of organ names to target colors (rgba)
+const COLORS = {
+  Heart:   { base: [255, 64, 64]   },
+  Lungs:   { base: [80, 160, 255]  },
+  Liver:   { base: [255, 210, 80]  },
+  Stomach: { base: [150, 255, 150] }
+};
+
+// Apply RGBA to a material (if mesh exists)
+function colorizeMesh(node, rgba) {
+  if (!node || !node.material) return;
+  const pbr = node.material.pbrMetallicRoughness;
+  if (!pbr) return;
+  const [r,g,b,a] = rgba;
+  pbr.setBaseColorFactor([r/255, g/255, b/255, a]);
+  // enable transparency
+  node.material.setAlphaMode('BLEND');
+}
+
+// Toggle a named organ node; scale trick to hide/show if needed
+function toggleOrgan(name, on) {
+  try {
+    const node = mv.model.getNodeByName(name);
+    if (!node) return;  // organ not in GLB yet => safe no-op
+    node.setScale(on ? {x:1,y:1,z:1} : {x:0.0001,y:0.0001,z:0.0001});
+  } catch(_) {}
+}
+
+// Re-apply organ colors with current alpha
+function reapplyVitalColors() {
+  try {
+    for (const [name, cfg] of Object.entries(COLORS)) {
+      const node = mv.model.getNodeByName(name);
+      if (!node) continue;
+      colorizeMesh(node, [...cfg.base, state.alpha]);
+    }
+  } catch(_) {}
+}
+
+// Ghost body opacity (lowering base body alpha so vitals read easier)
+function setBodyGhost(alpha) {
+  try {
+    // Heuristic: apply to all materials except our organ names (if those use unique materials)
+    mv.model.materials.forEach(mat => {
+      const pbr = mat.pbrMetallicRoughness;
+      if (!pbr) return;
+      // Skip obvious “organ” materials if named that way
+      const name = mat.name?.toLowerCase() || '';
+      if (name.includes('heart') || name.includes('lung') || name.includes('liver') || name.includes('stomach')) return;
+
+      const base = pbr.baseColorFactor;
+      // base is [r,g,b,a]
+      const newA = Math.min(base[3], alpha);
+      pbr.setBaseColorFactor([base[0], base[1], base[2], newA]);
+      mat.setAlphaMode('BLEND');
+    });
+  } catch(_) {}
+}
+
+// Button wiring
+btnPlace.addEventListener('click', () => {
+  state.placing = true;
+  state.locked = false;
+  btnLock.textContent = 'Lock Pin';
+  pin.style.display = 'none';
+  say('Tap on the deer to place the red pin');
+});
+
+btnLock.addEventListener('click', () => {
+  if (pin.style.display === 'none') { say('Place the pin first'); return; }
+  state.locked = !state.locked;
+  btnLock.textContent = state.locked ? 'Unlock Pin' : 'Lock Pin';
+  say(state.locked ? 'Pin locked' : 'Pin unlocked');
+});
+
+btnClear.addEventListener('click', () => {
+  pin.style.display = 'none';
+  state.locked = false;
+  state.placing = false;
+  btnLock.textContent = 'Lock Pin';
+});
+
+// On model load, we can safely touch scene-graph
+mv.addEventListener('load', () => {
+  // Set initial organ colors (if present)
+  reapplyVitalColors();
+});
+
+// Place pin by tapping the mesh (entry point); the hotspot will stick to the surface normal
+mv.addEventListener('click', async (ev) => {
+  if (!state.placing || state.locked) return;
+
+  // position & normal from the screen point
+  const hit = mv.positionAndNormalFromPoint(ev.clientX, ev.clientY);
+  if (!hit) {
+    say('Tap the deer model itself');
+    return;
+  }
+
+  const { position, normal } = hit; // {x,y,z}
+  // Set hotspot attributes
+  pin.style.display = 'inline-block';
+  pin.slot = 'hotspot-entry'; // name can be anything
+  pin.dataset.position = `${position.x} ${position.y} ${position.z}`;
+  pin.dataset.normal   = `${normal.x} ${normal.y} ${normal.z}`;
+
+  // orient the pin a little along the normal so the rod points inward-ish
+  pin.style.setProperty('--pin-tilt', '1');
+
+  // Finish placing (you can still lock after)
+  state.placing = false;
+  say('Pin placed. Lock it to spin freely.');
+});
+
+// Vitals toggles
+function wireToggle(id, name) {
+  document.getElementById(id).addEventListener('change', (e) => {
+    toggleOrgan(name, e.target.checked);
+    reapplyVitalColors();
+  });
+}
+wireToggle('chkHeart', 'Heart');
+wireToggle('chkLungs', 'Lungs');
+wireToggle('chkLiver', 'Liver');
+wireToggle('chkStomach', 'Stomach');
+
+document.getElementById('alpha').addEventListener('input', (e) => {
+  state.alpha = parseFloat(e.target.value);
+  reapplyVitalColors();
+});
+
+document.getElementById('ghost').addEventListener('input', (e) => {
+  state.ghost = parseFloat(e.target.value);
+  setBodyGhost(state.ghost);
+});
+</script>
+</body>
+</html>
